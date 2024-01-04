@@ -1,0 +1,292 @@
+---
+title: "Glioblastoma_Bulk_RNAseq_Analysis"
+output: rmarkdown::github_document
+---
+
+## Objectives
+
+### Gene expression profiling study by RNA-seq in glioblastoma cell lines using data from the journal article "Upregulated YB-1 protein promotes glioblastoma growth through a YB-1/CCT4/mLST8/mTOR pathway." 
+
+### Wang et al., 2022 J Clin Invest 132:e146536
+
+### YB-1 is a cold shock domain (CSD)-containing RNA binding protein. It is involved in virtually all steps of RNA metabolism. In this study, we detected the gene expression profiles of control or YB-1 knockdown in U251 and U87 cells by performing high-throughput RNA sequencing.
+
+### RNA-seq was performed from U251 cells expressing control- or YB-1-specific shRNAs. RNA-seq was performed from U87 cells expressing control- or YB-1-specific shRNAs.
+
+## Data
+
+### Raw data is accessible from GEO with the following accession code: GSE161523
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r}
+
+pacman::p_load(tidyverse, readxl, openxlsx, janitor, ggrepel, stringi, ggvenn,
+               edgeR, DESeq2, EnhancedVolcano, pheatmap, clusterProfiler,
+               org.Hs.eg.db, AnnotationDbi, conflicted)
+conflict_prefer("filter", "dplyr") 
+conflict_prefer("select", "dplyr")
+conflict_prefer("setdiff", "dplyr")
+conflict_prefer("rename", "dplyr")
+rm(list=ls())
+
+```
+
+## Read in counts
+
+```{r}
+## count matrix ##
+counts_U251 <- read_delim("./data/GSE161523_all_sample_read.count.tsv",
+                          na = c("", "NA")) %>% 
+  column_to_rownames("...1") 
+counts_U87  <- read_delim("./data/GSE161523_U87_all_sample_read.count.tsv",
+                          na = c("", "NA")) %>% 
+  column_to_rownames("...1") 
+
+
+## Pre-filtering only in U87 ##
+n_expressed_U87 <- rowSums(counts_U87 > 0)
+sum(n_expressed_U87==0)    # non expressing genes = 32432
+counts_U87_pf <- counts_U87[ n_expressed_U87 > 0,]   # Gene Number = 28244
+
+```
+
+## Sample annotation
+
+```{r}
+## sample information(coldata) ##
+sample_ann_U251 <- as.data.frame(t(counts_U251))　%>% 
+  mutate(Group=row.names(.)) %>%
+  dplyr::select(Group) %>% 
+  mutate(Group = str_sub(Group, 1, str_length(Group)-1)) 
+
+sample_ann_U251$Group <-
+  stri_replace_all_regex(sample_ann_U251$Group,
+                         pattern=c("shluc","shY"),
+                         replacement=c("control","YB_1KD"),
+                         vectorize_all=FALSE) 
+
+sample_ann_U87 <- as.data.frame(t(counts_U87_pf))　%>% 
+  mutate(Group=row.names(.)) %>%
+  select(Group) %>% 
+  mutate(Group = str_sub(Group, 1, str_length(Group)-2)) 
+
+sample_ann_U87$Group <-
+  stri_replace_all_regex(sample_ann_U87$Group,
+                         pattern=c("shLuc","shY1"),
+                         replacement=c("control","YB_1KD"),
+                         vectorize_all=FALSE)
+
+```
+
+
+## Q1. Generate DESeq2 object using column/count data
+
+```{r}
+
+identical( colnames(counts_U251), rownames(sample_ann_U251) )
+
+all(colnames(counts_U87_pf) %in% rownames(sample_ann_U87))
+
+
+dds_U251 <- DESeqDataSetFromMatrix(countData = round(counts_U251),
+                                   colData = sample_ann_U251,
+                                   design = ~ Group)
+
+dds_U87 <- DESeqDataSetFromMatrix(countData = round(counts_U87_pf),
+                                  colData = sample_ann_U87,
+                                  design = ~ Group)
+
+```
+
+## DIFFERENTIAL GENE EXPRESSION 
+### Q2. Find differentially expressed genes (DEGs) between Control and YB-1 knockdown cell lines
+
+```{r}
+
+# U251
+
+dds_U251 <- DESeq(dds_U251)
+res_U251 <- results(dds_U251, 
+                    contrast=c("Group", "YB_1KD", "control")) %>% 
+  data.frame() 
+resordered_U251 <- res_U251[order(res_U251$padj),]
+write.table(resordered_U251, file="./results/DESeq2_u251.txt",
+            sep = "\t", quote = FALSE, row.names = TRUE, col.names=NA)
+
+# U87
+
+dds_U87 <- DESeq(dds_U87)
+res_U87 <- results(dds_U87, 
+                   contrast=c("Group", "YB_1KD", "control")) %>% 
+  data.frame() 
+resordered_U87 <- arrange(res_U87, padj)
+write.csv(resordered_U87, file="./results/DESeq2_u87.csv")
+
+```
+
+## Q3. Make a volcano plot of up and down-regulated genes.
+### U251
+
+```{r}
+res_U251 <- read_delim("./results/DESeq2_u251.txt")
+
+EnhancedVolcano(res_U251, lab=res_U251$...1, x="log2FoldChange", y="padj",
+                selectLab = c("ENSG00000065978", "ENSG00000075624",
+                              "ENSG00000106366", "ENSG00000132688",
+                              "ENSG00000168672"),
+                FCcutoff=log2(2),
+                pCutoff=1e-05,
+                title="Volcano Plot U251",
+                subtitle=NULL, ylab=bquote(~-Log[10] ~ italic(adj_p)))
+```
+
+### U87
+
+```{r}
+
+res_U87 <- read_delim("./results/DESeq2_u87.csv")
+res_U87$Legend = case_when(res_U87$padj<=1e-05 & abs(res_U87$log2FoldChange)>=1 ~ "Significant & Fold Change",
+                           res_U87$padj<=1e-05 ~ "Significant",
+                           abs(res_U87$log2FoldChange)>=1 ~ "Fold Change",
+                           TRUE ~ "Non-significant")
+extract_U87 <- res_U87 %>%
+  filter(Legend == "Significant & Fold Change") %>% 
+  rename("ENSEMBL" = "...1")
+
+p <- ggplot(res_U87, aes(log2FoldChange, -log10(padj))) +
+  geom_point(aes(col=Legend), position=position_jitter(h=0.15,w=0.15)) +
+  scale_color_manual(values=c("Significant & Fold Change"="red",
+                              "Significant"="#a18f80",
+                              "Fold Change"="grey",
+                              "Non-significant"="black")) +
+  xlab(expression(paste("Log"[2]," (Fold Change)"))) +
+  ylab(expression(paste("-Log"[10]," (p Value)"))) +
+  ggtitle("Volcano plot U87") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_bw() +
+  geom_hline(yintercept = 3, linetype = 2, colour = "red") +
+  geom_vline(xintercept = 1, linetype = 2, colour = "red") +
+  geom_vline(xintercept = -1, linetype = 2, colour = "red")
+
+gene_ann_U87 <- data.frame(ENSEMBL=res_U87$...1)
+map <- bitr(gene_ann_U87$ENSEMBL, 
+            fromType="ENSEMBL", 
+            toType=c("SYMBOL","GENENAME"), 
+            OrgDb="org.Hs.eg.db")
+colnames(res_U87)[1 ] <- "ENSEMBL"
+res_U87 <- left_join(res_U87, map) 
+
+genes_to_plot_U87 <- res_U87 %>% 
+  filter (abs(log2FoldChange) >1 & -log10(padj) >50)
+
+p + geom_label_repel(data = genes_to_plot_U87,   
+                     aes(label = SYMBOL),
+                     force = 2,
+                     nudge_y = 1)
+```
+
+## PATHWAY ENRICHMENT ANALYSIS
+### Q4. What are the top up and down regulated pathways?
+### U251
+
+```{r}
+
+tum_ranked_U251 <- read_delim("./results/DESeq2_u251.txt") %>% filter(padj < 0.05) %>%
+  filter(log2FoldChange > 1 | log2FoldChange < -1) %>% rename("ENSEMBL" = "...1")
+
+gene_ann <- data.frame(SYMBOL=tum_ranked_U251$ENSEMBL)
+map <- bitr(gene_ann$SYMBOL, fromType="ENSEMBL", toType=c("SYMBOL","GENENAME"), OrgDb="org.Hs.eg.db")
+
+tum_ranked_U251 <- tum_ranked_U251 %>% full_join(map) 
+
+original_gene_list_U251 <- tum_ranked_U251$log2FoldChange
+names(original_gene_list_U251) <- tum_ranked_U251$ENSEMBL
+gene_list_U251 <- na.omit(original_gene_list_U251)
+gene_list_U251 = sort(gene_list_U251, decreasing = TRUE)
+
+gse_U251_1 <- gseGO(geneList=gene_list_U251, 
+                    ont ="BP", 
+                    keyType = "ENSEMBL", 
+                    minGSSize = 3, 
+                    maxGSSize = 800, 
+                    pvalueCutoff = 0.05, 
+                    verbose = TRUE, 
+                    OrgDb = org.Hs.eg.db, 
+                    pAdjustMethod = "none")
+
+dotplot(gse_U251_1, showCategory=20, split=".sign") + facet_grid(.~.sign)
+
+```
+
+### U87
+
+```{r}
+
+tum_ranked_U87 <- read_csv("./results/DESeq2_u87.csv") %>% 
+  rename("ENSEMBL" = "...1") %>% 
+  filter(abs(log2FoldChange)>1 & padj<0.05)
+
+gene_ann <- data.frame(SYMBOL=tum_ranked_U87$ENSEMBL)
+map <- bitr(gene_ann$SYMBOL, fromType="ENSEMBL", toType=c("SYMBOL","GENENAME"), OrgDb="org.Hs.eg.db")
+
+tum_ranked_U87 <- tum_ranked_U87 %>% full_join(map) 
+original_gene_list <- tum_ranked_U87$log2FoldChange
+names(original_gene_list) <- tum_ranked_U87$ENSEMBL
+gene_list <- na.omit(original_gene_list)
+gene_list = sort(gene_list, decreasing = TRUE)
+
+gse1 <- gseGO(geneList=gene_list, 
+              ont ="BP", 
+              keyType = "ENSEMBL", 
+              nPerm = 10000, 
+              minGSSize = 3, 
+              maxGSSize = 800, 
+              pvalueCutoff = 0.05, 
+              verbose = TRUE, 
+              OrgDb = org.Hs.eg.db, 
+              pAdjustMethod = "none")
+
+dotplot(gse1, showCategory=5, split=".sign") + facet_grid(.~.sign)
+```
+
+## Venn Diagram
+### Q5. Find shared up-regulated and down-regulated genes across the two cell lines
+
+```{r}
+
+u87_up_genes <- read_delim("./results/DESeq2_u87.csv") %>%
+  filter(log2FoldChange > 1 & padj <0.05) %>%
+  select("...1") %>% dplyr::rename("u87_up_genes" = "...1")
+
+u87_down_genes <- read_delim("./results/DESeq2_u87.csv") %>%
+  filter(log2FoldChange < -1 & padj <0.05) %>%
+  select("...1") %>%
+  rename("u87_down_genes" = "...1")
+
+u251_up_genes <- read_delim("./results/DESeq2_u251.txt") %>%
+  filter(log2FoldChange > 1 & padj <0.05) %>%
+  select("...1") %>% dplyr::rename("u251_up_genes" = "...1")
+
+u251_down_genes <- read_delim("./results/DESeq2_u251.txt") %>%
+  filter(log2FoldChange < -1 & padj <0.05) %>%
+  select("...1") %>%
+  rename("u251_down_genes" = "...1")
+
+venn_list <- list(`u87_up` = u87_up_genes$u87_up_genes,
+                  `u87_down` = u87_down_genes$u87_down_genes,
+                  `u251_up` = u251_up_genes$u251_up_genes,
+                  `u251_down` = u251_down_genes$u251_down_genes)
+
+result_up <- ggvenn(venn_list, c("u87_up", "u251_up"))
+result_down <- ggvenn(venn_list, c("u87_down", "u251_down"))
+
+result_up
+
+result_down
+
+```
