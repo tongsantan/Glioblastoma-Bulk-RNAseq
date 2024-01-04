@@ -182,9 +182,8 @@ dds_U251 <- DESeq(dds_U251)
 res_U251 <- results(dds_U251, 
                     contrast=c("Group", "YB_1KD", "control")) %>% 
   data.frame() 
-resordered_U251 <- res_U251[order(res_U251$padj),]
-write.table(resordered_U251, file="./results/DESeq2_u251.txt",
-            sep = "\t", quote = FALSE, row.names = TRUE, col.names=NA)
+resordered_U251 <- arrange(res_U251, padj)
+write.csv(resordered_U251, file="./results/DESeq2_u251.csv")
 
 # U87
 
@@ -220,31 +219,75 @@ write.csv(resordered_U87, file="./results/DESeq2_u87.csv")
 ### U251
 
 ``` r
-res_U251 <- read_delim("./results/DESeq2_u251.txt")
+res_U251 <- read_delim("./results/DESeq2_u251.csv")
 ```
 
     ## New names:
     ## Rows: 60676 Columns: 7
     ## ── Column specification
-    ## ──────────────────────────────────────────────────────── Delimiter: "\t" chr
+    ## ──────────────────────────────────────────────────────── Delimiter: "," chr
     ## (1): ...1 dbl (6): baseMean, log2FoldChange, lfcSE, stat, pvalue, padj
     ## ℹ Use `spec()` to retrieve the full column specification for this data. ℹ
     ## Specify the column types or set `show_col_types = FALSE` to quiet this message.
     ## • `` -> `...1`
 
 ``` r
-EnhancedVolcano(res_U251, lab=res_U251$...1, x="log2FoldChange", y="padj",
-                selectLab = c("ENSG00000065978", "ENSG00000075624",
-                              "ENSG00000106366", "ENSG00000132688",
-                              "ENSG00000168672"),
-                FCcutoff=log2(2),
-                pCutoff=1e-05,
-                title="Volcano Plot U251",
-                subtitle=NULL, ylab=bquote(~-Log[10] ~ italic(adj_p)))
+res_U251$Legend = case_when(res_U251$padj<=1e-05 & abs(res_U251$log2FoldChange)>=1 ~ "Significant & Fold Change",
+                           res_U251$padj<=1e-05 ~ "Significant",
+                           abs(res_U251$log2FoldChange)>=1 ~ "Fold Change",
+                           TRUE ~ "Non-significant")
+extract_U251 <- res_U251 %>%
+  filter(Legend == "Significant & Fold Change") %>% 
+  rename("ENSEMBL" = "...1")
+
+p <- ggplot(res_U251, aes(log2FoldChange, -log10(padj))) +
+  geom_point(aes(col=Legend), position=position_jitter(h=0.15,w=0.15)) +
+  scale_color_manual(values=c("Significant & Fold Change"="red",
+                              "Significant"="#a18f80",
+                              "Fold Change"="grey",
+                              "Non-significant"="black")) +
+  xlab(expression(paste("Log"[2]," (Fold Change)"))) +
+  ylab(expression(paste("-Log"[10]," (p Value)"))) +
+  ggtitle("Volcano plot U251") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_bw() +
+  geom_hline(yintercept = 3, linetype = 2, colour = "red") +
+  geom_vline(xintercept = 1, linetype = 2, colour = "red") +
+  geom_vline(xintercept = -1, linetype = 2, colour = "red")
+
+gene_ann_U251 <- data.frame(ENSEMBL=res_U251$...1)
+map <- bitr(gene_ann_U251$ENSEMBL, 
+            fromType="ENSEMBL", 
+            toType=c("SYMBOL","GENENAME"), 
+            OrgDb="org.Hs.eg.db")
 ```
 
-    ## Warning: One or more p-values is 0. Converting to 10^-1 * current lowest
-    ## non-zero p-value...
+    ## 'select()' returned 1:many mapping between keys and columns
+
+    ## Warning in bitr(gene_ann_U251$ENSEMBL, fromType = "ENSEMBL", toType =
+    ## c("SYMBOL", : 40.3% of input gene IDs are fail to map...
+
+``` r
+colnames(res_U251)[1 ] <- "ENSEMBL"
+res_U251 <- left_join(res_U251, map) 
+```
+
+    ## Joining with `by = join_by(ENSEMBL)`
+
+``` r
+genes_to_plot_U251 <- res_U251 %>% 
+  filter (abs(log2FoldChange) >1 & -log10(padj) >50)
+
+p + geom_label_repel(data = genes_to_plot_U251,   
+                     aes(label = SYMBOL),
+                     force = 2,
+                     nudge_y = 1)
+```
+
+    ## Warning: Removed 45737 rows containing missing values (`geom_point()`).
+
+    ## Warning: ggrepel: 9 unlabeled data points (too many overlaps). Consider
+    ## increasing max.overlaps
 
 ![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
@@ -327,14 +370,15 @@ p + geom_label_repel(data = genes_to_plot_U87,
 ### U251
 
 ``` r
-tum_ranked_U251 <- read_delim("./results/DESeq2_u251.txt") %>% filter(padj < 0.05) %>%
-  filter(log2FoldChange > 1 | log2FoldChange < -1) %>% rename("ENSEMBL" = "...1")
+tum_ranked_U251 <- read_csv("./results/DESeq2_u251.csv") %>% 
+  rename("ENSEMBL" = "...1") %>% 
+  filter(abs(log2FoldChange)>1 & padj<0.05)
 ```
 
     ## New names:
     ## Rows: 60676 Columns: 7
     ## ── Column specification
-    ## ──────────────────────────────────────────────────────── Delimiter: "\t" chr
+    ## ──────────────────────────────────────────────────────── Delimiter: "," chr
     ## (1): ...1 dbl (6): baseMean, log2FoldChange, lfcSE, stat, pvalue, padj
     ## ℹ Use `spec()` to retrieve the full column specification for this data. ℹ
     ## Specify the column types or set `show_col_types = FALSE` to quiet this message.
@@ -384,7 +428,7 @@ gse_U251_1 <- gseGO(geneList=gene_list_U251,
     ## results.
 
     ## Warning in fgseaMultilevel(pathways = pathways, stats = stats, minSize =
-    ## minSize, : There were 2 pathways for which P-values were not calculated
+    ## minSize, : There were 5 pathways for which P-values were not calculated
     ## properly due to unbalanced (positive and negative) gene-level statistic values.
     ## For such pathways pval, padj, NES, log2err are set to NA. You can try to
     ## increase the value of the argument nPermSimple (for example set it nPermSimple
@@ -398,7 +442,7 @@ gse_U251_1 <- gseGO(geneList=gene_list_U251,
     ## done...
 
 ``` r
-dotplot(gse_U251_1, showCategory=20, split=".sign") + facet_grid(.~.sign)
+dotplot(gse_U251_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ```
 
 ![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
@@ -442,7 +486,7 @@ names(original_gene_list) <- tum_ranked_U87$ENSEMBL
 gene_list <- na.omit(original_gene_list)
 gene_list = sort(gene_list, decreasing = TRUE)
 
-gse1 <- gseGO(geneList=gene_list, 
+gse_U87_1 <- gseGO(geneList=gene_list, 
               ont ="BP", 
               keyType = "ENSEMBL", 
               nPerm = 10000, 
@@ -477,7 +521,7 @@ gse1 <- gseGO(geneList=gene_list,
     ## done...
 
 ``` r
-dotplot(gse1, showCategory=5, split=".sign") + facet_grid(.~.sign)
+dotplot(gse_U87_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ```
 
 ![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
@@ -518,7 +562,7 @@ u87_down_genes <- read_delim("./results/DESeq2_u87.csv") %>%
     ## • `` -> `...1`
 
 ``` r
-u251_up_genes <- read_delim("./results/DESeq2_u251.txt") %>%
+u251_up_genes <- read_delim("./results/DESeq2_u251.csv") %>%
   filter(log2FoldChange > 1 & padj <0.05) %>%
   select("...1") %>% dplyr::rename("u251_up_genes" = "...1")
 ```
@@ -526,14 +570,14 @@ u251_up_genes <- read_delim("./results/DESeq2_u251.txt") %>%
     ## New names:
     ## Rows: 60676 Columns: 7
     ## ── Column specification
-    ## ──────────────────────────────────────────────────────── Delimiter: "\t" chr
+    ## ──────────────────────────────────────────────────────── Delimiter: "," chr
     ## (1): ...1 dbl (6): baseMean, log2FoldChange, lfcSE, stat, pvalue, padj
     ## ℹ Use `spec()` to retrieve the full column specification for this data. ℹ
     ## Specify the column types or set `show_col_types = FALSE` to quiet this message.
     ## • `` -> `...1`
 
 ``` r
-u251_down_genes <- read_delim("./results/DESeq2_u251.txt") %>%
+u251_down_genes <- read_delim("./results/DESeq2_u251.csv") %>%
   filter(log2FoldChange < -1 & padj <0.05) %>%
   select("...1") %>%
   rename("u251_down_genes" = "...1")
@@ -542,7 +586,7 @@ u251_down_genes <- read_delim("./results/DESeq2_u251.txt") %>%
     ## New names:
     ## Rows: 60676 Columns: 7
     ## ── Column specification
-    ## ──────────────────────────────────────────────────────── Delimiter: "\t" chr
+    ## ──────────────────────────────────────────────────────── Delimiter: "," chr
     ## (1): ...1 dbl (6): baseMean, log2FoldChange, lfcSE, stat, pvalue, padj
     ## ℹ Use `spec()` to retrieve the full column specification for this data. ℹ
     ## Specify the column types or set `show_col_types = FALSE` to quiet this message.
