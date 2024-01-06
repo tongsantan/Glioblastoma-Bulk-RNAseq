@@ -90,8 +90,20 @@ sum(n_expressed_U87==0)    # non expressing genes = 32432
     ## [1] 32432
 
 ``` r
-counts_U87_pf <- counts_U87[ n_expressed_U87 > 0,]   # Gene Number = 28244
+ggplot(data.frame(n_expressed_U87), aes(x=n_expressed_U87)) +
+  geom_bar() +
+  labs(x="Number of samples expressed in", y="Number of genes") +
+  theme_bw(base_size = 20)
 ```
+
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+
+``` r
+counts_U87_pf <- counts_U87[ n_expressed_U87 > 0,]   # Gene Number = 28244
+dim(counts_U87_pf) # 28244 4
+```
+
+    ## [1] 28244     4
 
 ## Sample annotation
 
@@ -99,7 +111,7 @@ counts_U87_pf <- counts_U87[ n_expressed_U87 > 0,]   # Gene Number = 28244
 ## sample information(coldata) ##
 sample_ann_U251 <- as.data.frame(t(counts_U251))　%>% 
   mutate(Group=row.names(.)) %>%
-  dplyr::select(Group) %>% 
+  select(Group) %>% 
   mutate(Group = str_sub(Group, 1, str_length(Group)-1)) 
 
 sample_ann_U251$Group <-
@@ -120,7 +132,9 @@ sample_ann_U87$Group <-
                          vectorize_all=FALSE)
 ```
 
-## Q1. Generate DESeq2 object using column/count data
+## Q1. Generate DESeq2 object using column/count data and make a PCA plot using normalised count data.
+
+## Are control and YB_1 KD samples separated on the PCA plot?
 
 ``` r
 identical( colnames(counts_U251), rownames(sample_ann_U251) )
@@ -146,6 +160,52 @@ dds_U251 <- DESeqDataSetFromMatrix(countData = round(counts_U251),
     ## design formula are characters, converting to factors
 
 ``` r
+assay(dds_U251)[ 1:3, 1:4]
+```
+
+    ##                 shluc1 shluc2 shY1 shY2
+    ## ENSG00000000003    222    240  230  207
+    ## ENSG00000000005      0      0    0    0
+    ## ENSG00000000419    378    434  503  443
+
+``` r
+cpm(dds_U251)[1:3, 1:4]
+```
+
+    ##                   shluc1   shluc2     shY1     shY2
+    ## ENSG00000000003 24.42758 23.26525 23.11635 21.72974
+    ## ENSG00000000005  0.00000  0.00000  0.00000  0.00000
+    ## ENSG00000000419 41.59290 42.07132 50.55445 46.50375
+
+``` r
+cpm(dds_U251) %>% colSums() %>% head()
+```
+
+    ## shluc1 shluc2   shY1   shY2 
+    ##  1e+06  1e+06  1e+06  1e+06
+
+``` r
+colData(dds_U251)[1:3, ]
+```
+
+    ## [1] control control YB_1KD 
+    ## Levels: control YB_1KD
+
+``` r
+rowData(dds_U251)[1:3, ]
+```
+
+    ## DataFrame with 3 rows and 0 columns
+
+``` r
+dim(dds_U251) #60676   4
+```
+
+    ## [1] 60676     4
+
+``` r
+save(dds_U251, file="./data/data_U251_clean.rda", compress=TRUE)
+
 dds_U87 <- DESeqDataSetFromMatrix(countData = round(counts_U87_pf),
                                   colData = sample_ann_U87,
                                   design = ~ Group)
@@ -155,6 +215,95 @@ dds_U87 <- DESeqDataSetFromMatrix(countData = round(counts_U87_pf),
 
     ## Warning in DESeqDataSet(se, design = design, ignoreRank): some variables in
     ## design formula are characters, converting to factors
+
+``` r
+assay(dds_U87)[ 1:3, 1:4]
+```
+
+    ##                 shLuc_1 shLuc_2 shY1_1 shY1_2
+    ## ENSG00000000003     281     262    173    242
+    ## ENSG00000000419     716     788    594    784
+    ## ENSG00000000457      66      69     74     92
+
+``` r
+cpm(dds_U87)[1:3, 1:4]
+```
+
+    ##                   shLuc_1   shLuc_2    shY1_1    shY1_2
+    ## ENSG00000000003 32.640601 28.027487 21.599502 24.663876
+    ## ENSG00000000419 83.169646 84.296413 74.162451 79.902804
+    ## ENSG00000000457  7.666476  7.381285  9.239093  9.376349
+
+``` r
+cpm(dds_U87) %>% colSums() %>% head()
+```
+
+    ## shLuc_1 shLuc_2  shY1_1  shY1_2 
+    ##   1e+06   1e+06   1e+06   1e+06
+
+``` r
+colData(dds_U87)[1:3, ]
+```
+
+    ## [1] control control YB_1KD 
+    ## Levels: control YB_1KD
+
+``` r
+rowData(dds_U87)[1:3, ]
+```
+
+    ## DataFrame with 3 rows and 0 columns
+
+``` r
+dim(dds_U87) #28244   4
+```
+
+    ## [1] 28244     4
+
+``` r
+save(dds_U87, file="./data/data_U87_clean.rda", compress=TRUE)
+```
+
+## VST expression (Variable stabilizing)
+
+### U251
+
+``` r
+vst_U251_expr <- vst(dds_U251, blind=FALSE)
+norm_U251_count <- assay(vst_U251_expr)
+
+write.csv(norm_U251_count,"./results/normalized_counts_U251.csv", row.names = TRUE) 
+```
+
+## PCA
+
+``` r
+plotPCA(vst_U251_expr, intgroup="Group") + 
+  theme_bw(base_size=15)
+```
+
+    ## using ntop=500 top features by variance
+
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+\### U251
+
+``` r
+vst_U87_expr <- vst(dds_U87, blind=FALSE)
+norm_U87_count <- assay(vst_U87_expr)
+
+write.csv(norm_U87_count,"./results/normalized_counts_U87.csv", row.names = TRUE) 
+```
+
+## PCA
+
+``` r
+plotPCA(vst_U87_expr, intgroup="Group") + 
+  theme_bw(base_size=15)
+```
+
+    ## using ntop=500 top features by variance
+
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 ## DIFFERENTIAL GENE EXPRESSION
 
@@ -181,9 +330,10 @@ dds_U251 <- DESeq(dds_U251)
 ``` r
 res_U251 <- results(dds_U251, 
                     contrast=c("Group", "YB_1KD", "control")) %>% 
-  data.frame() 
+                    data.frame()
 resordered_U251 <- arrange(res_U251, padj)
 write.csv(resordered_U251, file="./results/DESeq2_u251.csv")
+
 
 # U87
 
@@ -209,7 +359,7 @@ dds_U87 <- DESeq(dds_U87)
 ``` r
 res_U87 <- results(dds_U87, 
                    contrast=c("Group", "YB_1KD", "control")) %>% 
-  data.frame() 
+                   data.frame()  
 resordered_U87 <- arrange(res_U87, padj)
 write.csv(resordered_U87, file="./results/DESeq2_u87.csv")
 ```
@@ -289,7 +439,7 @@ p + geom_label_repel(data = genes_to_plot_U251,
     ## Warning: ggrepel: 9 unlabeled data points (too many overlaps). Consider
     ## increasing max.overlaps
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 ### U87
 
@@ -361,7 +511,7 @@ p + geom_label_repel(data = genes_to_plot_U87,
 
     ## Warning: Removed 13690 rows containing missing values (`geom_point()`).
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ## PATHWAY ENRICHMENT ANALYSIS
 
@@ -428,7 +578,7 @@ gse_U251_1 <- gseGO(geneList=gene_list_U251,
     ## results.
 
     ## Warning in fgseaMultilevel(pathways = pathways, stats = stats, minSize =
-    ## minSize, : There were 5 pathways for which P-values were not calculated
+    ## minSize, : There were 4 pathways for which P-values were not calculated
     ## properly due to unbalanced (positive and negative) gene-level statistic values.
     ## For such pathways pval, padj, NES, log2err are set to NA. You can try to
     ## increase the value of the argument nPermSimple (for example set it nPermSimple
@@ -445,7 +595,7 @@ gse_U251_1 <- gseGO(geneList=gene_list_U251,
 dotplot(gse_U251_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 ### U87
 
@@ -524,7 +674,7 @@ gse_U87_1 <- gseGO(geneList=gene_list,
 dotplot(gse_U87_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 ## Venn Diagram
 
@@ -533,7 +683,7 @@ dotplot(gse_U87_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ``` r
 u87_up_genes <- read_delim("./results/DESeq2_u87.csv") %>%
   filter(log2FoldChange > 1 & padj <0.05) %>%
-  select("...1") %>% dplyr::rename("u87_up_genes" = "...1")
+  select("...1") %>% rename("u87_up_genes" = "...1")
 ```
 
     ## New names:
@@ -564,7 +714,7 @@ u87_down_genes <- read_delim("./results/DESeq2_u87.csv") %>%
 ``` r
 u251_up_genes <- read_delim("./results/DESeq2_u251.csv") %>%
   filter(log2FoldChange > 1 & padj <0.05) %>%
-  select("...1") %>% dplyr::rename("u251_up_genes" = "...1")
+  select("...1") %>% rename("u251_up_genes" = "...1")
 ```
 
     ## New names:
@@ -604,10 +754,10 @@ result_down <- ggvenn(venn_list, c("u87_down", "u251_down"))
 result_up
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 ``` r
 result_down
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-16-2.png)<!-- -->

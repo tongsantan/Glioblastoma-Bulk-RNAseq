@@ -51,8 +51,20 @@ counts_U87  <- read_delim("./data/GSE161523_U87_all_sample_read.count.tsv",
 ## Pre-filtering only in U87 ##
 n_expressed_U87 <- rowSums(counts_U87 > 0)
 sum(n_expressed_U87==0)    # non expressing genes = 32432
-counts_U87_pf <- counts_U87[ n_expressed_U87 > 0,]   # Gene Number = 28244
 
+```
+
+```{r}
+ggplot(data.frame(n_expressed_U87), aes(x=n_expressed_U87)) +
+  geom_bar() +
+  labs(x="Number of samples expressed in", y="Number of genes") +
+  theme_bw(base_size = 20)
+
+```
+
+```{r}
+counts_U87_pf <- counts_U87[ n_expressed_U87 > 0,]   # Gene Number = 28244
+dim(counts_U87_pf) # 28244 4
 ```
 
 ## Sample annotation
@@ -61,7 +73,7 @@ counts_U87_pf <- counts_U87[ n_expressed_U87 > 0,]   # Gene Number = 28244
 ## sample information(coldata) ##
 sample_ann_U251 <- as.data.frame(t(counts_U251))　%>% 
   mutate(Group=row.names(.)) %>%
-  dplyr::select(Group) %>% 
+  select(Group) %>% 
   mutate(Group = str_sub(Group, 1, str_length(Group)-1)) 
 
 sample_ann_U251$Group <-
@@ -84,7 +96,8 @@ sample_ann_U87$Group <-
 ```
 
 
-## Q1. Generate DESeq2 object using column/count data
+## Q1. Generate DESeq2 object using column/count data and	make a PCA plot using normalised count data.
+## Are control and YB_1 KD samples separated on the PCA plot?
 
 ```{r}
 
@@ -97,10 +110,69 @@ dds_U251 <- DESeqDataSetFromMatrix(countData = round(counts_U251),
                                    colData = sample_ann_U251,
                                    design = ~ Group)
 
+assay(dds_U251)[ 1:3, 1:4]
+
+cpm(dds_U251)[1:3, 1:4]
+
+cpm(dds_U251) %>% colSums() %>% head()
+
+colData(dds_U251)[1:3, ]
+
+rowData(dds_U251)[1:3, ]
+
+dim(dds_U251) # 60676  4
+
+save(dds_U251, file="./data/data_U251_clean.rda", compress=TRUE)
+
 dds_U87 <- DESeqDataSetFromMatrix(countData = round(counts_U87_pf),
                                   colData = sample_ann_U87,
                                   design = ~ Group)
 
+assay(dds_U87)[ 1:3, 1:4]
+
+cpm(dds_U87)[1:3, 1:4]
+
+cpm(dds_U87) %>% colSums() %>% head()
+
+colData(dds_U87)[1:3, ]
+
+rowData(dds_U87)[1:3, ]
+
+dim(dds_U87) # 28244  4
+
+save(dds_U87, file="./data/data_U87_clean.rda", compress=TRUE)
+
+```
+## VST expression (Variable stabilizing)
+### U251
+
+```{r}
+vst_U251_expr <- vst(dds_U251, blind=FALSE)
+norm_U251_count <- assay(vst_U251_expr)
+
+write.csv(norm_U251_count,"./results/normalized_counts_U251.csv", row.names = TRUE) 
+```
+
+## PCA
+
+```{r}
+plotPCA(vst_U251_expr, intgroup="Group") + 
+  theme_bw(base_size=15)
+```
+### U251
+
+```{r}
+vst_U87_expr <- vst(dds_U87, blind=FALSE)
+norm_U87_count <- assay(vst_U87_expr)
+
+write.csv(norm_U87_count,"./results/normalized_counts_U87.csv", row.names = TRUE) 
+```
+
+## PCA
+
+```{r}
+plotPCA(vst_U87_expr, intgroup="Group") + 
+  theme_bw(base_size=15)
 ```
 
 ## DIFFERENTIAL GENE EXPRESSION 
@@ -113,16 +185,17 @@ dds_U87 <- DESeqDataSetFromMatrix(countData = round(counts_U87_pf),
 dds_U251 <- DESeq(dds_U251)
 res_U251 <- results(dds_U251, 
                     contrast=c("Group", "YB_1KD", "control")) %>% 
-  data.frame() 
+                    data.frame()
 resordered_U251 <- arrange(res_U251, padj)
 write.csv(resordered_U251, file="./results/DESeq2_u251.csv")
+
 
 # U87
 
 dds_U87 <- DESeq(dds_U87)
 res_U87 <- results(dds_U87, 
                    contrast=c("Group", "YB_1KD", "control")) %>% 
-  data.frame() 
+                   data.frame()  
 resordered_U87 <- arrange(res_U87, padj)
 write.csv(resordered_U87, file="./results/DESeq2_u87.csv")
 
@@ -290,7 +363,7 @@ dotplot(gse_U87_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 
 u87_up_genes <- read_delim("./results/DESeq2_u87.csv") %>%
   filter(log2FoldChange > 1 & padj <0.05) %>%
-  select("...1") %>% dplyr::rename("u87_up_genes" = "...1")
+  select("...1") %>% rename("u87_up_genes" = "...1")
 
 u87_down_genes <- read_delim("./results/DESeq2_u87.csv") %>%
   filter(log2FoldChange < -1 & padj <0.05) %>%
@@ -299,7 +372,7 @@ u87_down_genes <- read_delim("./results/DESeq2_u87.csv") %>%
 
 u251_up_genes <- read_delim("./results/DESeq2_u251.csv") %>%
   filter(log2FoldChange > 1 & padj <0.05) %>%
-  select("...1") %>% dplyr::rename("u251_up_genes" = "...1")
+  select("...1") %>% rename("u251_up_genes" = "...1")
 
 u251_down_genes <- read_delim("./results/DESeq2_u251.csv") %>%
   filter(log2FoldChange < -1 & padj <0.05) %>%
