@@ -138,17 +138,10 @@ sample_ann_U87$Group <-
 
 ``` r
 identical( colnames(counts_U251), rownames(sample_ann_U251) )
-```
 
-    ## [1] TRUE
-
-``` r
 all(colnames(counts_U87_pf) %in% rownames(sample_ann_U87))
-```
 
-    ## [1] TRUE
 
-``` r
 dds_U251 <- DESeqDataSetFromMatrix(countData = round(counts_U251),
                                    colData = sample_ann_U251,
                                    design = ~ Group)
@@ -161,49 +154,17 @@ dds_U251 <- DESeqDataSetFromMatrix(countData = round(counts_U251),
 
 ``` r
 assay(dds_U251)[ 1:3, 1:4]
-```
 
-    ##                 shluc1 shluc2 shY1 shY2
-    ## ENSG00000000003    222    240  230  207
-    ## ENSG00000000005      0      0    0    0
-    ## ENSG00000000419    378    434  503  443
-
-``` r
 cpm(dds_U251)[1:3, 1:4]
-```
 
-    ##                   shluc1   shluc2     shY1     shY2
-    ## ENSG00000000003 24.42758 23.26525 23.11635 21.72974
-    ## ENSG00000000005  0.00000  0.00000  0.00000  0.00000
-    ## ENSG00000000419 41.59290 42.07132 50.55445 46.50375
-
-``` r
 cpm(dds_U251) %>% colSums() %>% head()
-```
 
-    ## shluc1 shluc2   shY1   shY2 
-    ##  1e+06  1e+06  1e+06  1e+06
-
-``` r
 colData(dds_U251)[1:3, ]
-```
 
-    ## [1] control control YB_1KD 
-    ## Levels: control YB_1KD
-
-``` r
 rowData(dds_U251)[1:3, ]
-```
 
-    ## DataFrame with 3 rows and 0 columns
+dim(dds_U251) # 60676  4
 
-``` r
-dim(dds_U251) #60676   4
-```
-
-    ## [1] 60676     4
-
-``` r
 save(dds_U251, file="./data/data_U251_clean.rda", compress=TRUE)
 
 dds_U87 <- DESeqDataSetFromMatrix(countData = round(counts_U87_pf),
@@ -218,49 +179,17 @@ dds_U87 <- DESeqDataSetFromMatrix(countData = round(counts_U87_pf),
 
 ``` r
 assay(dds_U87)[ 1:3, 1:4]
-```
 
-    ##                 shLuc_1 shLuc_2 shY1_1 shY1_2
-    ## ENSG00000000003     281     262    173    242
-    ## ENSG00000000419     716     788    594    784
-    ## ENSG00000000457      66      69     74     92
-
-``` r
 cpm(dds_U87)[1:3, 1:4]
-```
 
-    ##                   shLuc_1   shLuc_2    shY1_1    shY1_2
-    ## ENSG00000000003 32.640601 28.027487 21.599502 24.663876
-    ## ENSG00000000419 83.169646 84.296413 74.162451 79.902804
-    ## ENSG00000000457  7.666476  7.381285  9.239093  9.376349
-
-``` r
 cpm(dds_U87) %>% colSums() %>% head()
-```
 
-    ## shLuc_1 shLuc_2  shY1_1  shY1_2 
-    ##   1e+06   1e+06   1e+06   1e+06
-
-``` r
 colData(dds_U87)[1:3, ]
-```
 
-    ## [1] control control YB_1KD 
-    ## Levels: control YB_1KD
-
-``` r
 rowData(dds_U87)[1:3, ]
-```
 
-    ## DataFrame with 3 rows and 0 columns
+dim(dds_U87) # 28244  4
 
-``` r
-dim(dds_U87) #28244   4
-```
-
-    ## [1] 28244     4
-
-``` r
 save(dds_U87, file="./data/data_U87_clean.rda", compress=TRUE)
 ```
 
@@ -285,7 +214,7 @@ plotPCA(vst_U251_expr, intgroup="Group") +
     ## using ntop=500 top features by variance
 
 ![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
-\### U251
+\### U87
 
 ``` r
 vst_U87_expr <- vst(dds_U87, blind=FALSE)
@@ -414,9 +343,6 @@ map <- bitr(gene_ann_U251$ENSEMBL,
 
     ## 'select()' returned 1:many mapping between keys and columns
 
-    ## Warning in bitr(gene_ann_U251$ENSEMBL, fromType = "ENSEMBL", toType =
-    ## c("SYMBOL", : 40.3% of input gene IDs are fail to map...
-
 ``` r
 colnames(res_U251)[1 ] <- "ENSEMBL"
 res_U251 <- left_join(res_U251, map) 
@@ -433,11 +359,6 @@ p + geom_label_repel(data = genes_to_plot_U251,
                      force = 2,
                      nudge_y = 1)
 ```
-
-    ## Warning: Removed 45737 rows containing missing values (`geom_point()`).
-
-    ## Warning: ggrepel: 9 unlabeled data points (too many overlaps). Consider
-    ## increasing max.overlaps
 
 ![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
@@ -489,9 +410,6 @@ map <- bitr(gene_ann_U87$ENSEMBL,
 
     ## 'select()' returned 1:many mapping between keys and columns
 
-    ## Warning in bitr(gene_ann_U87$ENSEMBL, fromType = "ENSEMBL", toType =
-    ## c("SYMBOL", : 30.7% of input gene IDs are fail to map...
-
 ``` r
 colnames(res_U87)[1 ] <- "ENSEMBL"
 res_U87 <- left_join(res_U87, map) 
@@ -508,8 +426,6 @@ p + geom_label_repel(data = genes_to_plot_U87,
                      force = 2,
                      nudge_y = 1)
 ```
-
-    ## Warning: Removed 13690 rows containing missing values (`geom_point()`).
 
 ![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
@@ -578,7 +494,7 @@ gse_U251_1 <- gseGO(geneList=gene_list_U251,
     ## results.
 
     ## Warning in fgseaMultilevel(pathways = pathways, stats = stats, minSize =
-    ## minSize, : There were 4 pathways for which P-values were not calculated
+    ## minSize, : There were 5 pathways for which P-values were not calculated
     ## properly due to unbalanced (positive and negative) gene-level statistic values.
     ## For such pathways pval, padj, NES, log2err are set to NA. You can try to
     ## increase the value of the argument nPermSimple (for example set it nPermSimple
@@ -595,7 +511,7 @@ gse_U251_1 <- gseGO(geneList=gene_list_U251,
 dotplot(gse_U251_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 ### U87
 
@@ -674,7 +590,7 @@ gse_U87_1 <- gseGO(geneList=gene_list,
 dotplot(gse_U87_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 ## Venn Diagram
 
@@ -754,10 +670,10 @@ result_down <- ggvenn(venn_list, c("u87_down", "u251_down"))
 result_up
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
 ``` r
 result_down
 ```
 
-![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-16-2.png)<!-- -->
+![](Glioblastoma_Bulk_RNAseq_Analysis_files/figure-gfm/unnamed-chunk-18-2.png)<!-- -->

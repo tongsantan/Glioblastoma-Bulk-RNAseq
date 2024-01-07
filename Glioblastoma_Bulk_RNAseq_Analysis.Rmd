@@ -99,7 +99,7 @@ sample_ann_U87$Group <-
 ## Q1. Generate DESeq2 object using column/count data and	make a PCA plot using normalised count data.
 ## Are control and YB_1 KD samples separated on the PCA plot?
 
-```{r}
+```{r, results='hide'}
 
 identical( colnames(counts_U251), rownames(sample_ann_U251) )
 
@@ -159,7 +159,7 @@ write.csv(norm_U251_count,"./results/normalized_counts_U251.csv", row.names = TR
 plotPCA(vst_U251_expr, intgroup="Group") + 
   theme_bw(base_size=15)
 ```
-### U251
+### U87
 
 ```{r}
 vst_U87_expr <- vst(dds_U87, blind=FALSE)
@@ -204,7 +204,7 @@ write.csv(resordered_U87, file="./results/DESeq2_u87.csv")
 ## Q3. Make a volcano plot of up and down-regulated genes.
 ### U251
 
-```{r}
+```{r, warning=FALSE}
 res_U251 <- read_delim("./results/DESeq2_u251.csv")
 res_U251$Legend = case_when(res_U251$padj<=1e-05 & abs(res_U251$log2FoldChange)>=1 ~ "Significant & Fold Change",
                            res_U251$padj<=1e-05 ~ "Significant",
@@ -248,7 +248,7 @@ p + geom_label_repel(data = genes_to_plot_U251,
 
 ### U87
 
-```{r}
+```{r, warning=FALSE}
 
 res_U87 <- read_delim("./results/DESeq2_u87.csv")
 res_U87$Legend = case_when(res_U87$padj<=1e-05 & abs(res_U87$log2FoldChange)>=1 ~ "Significant & Fold Change",
@@ -295,7 +295,7 @@ p + geom_label_repel(data = genes_to_plot_U87,
 ### Q4. What are the top up and down regulated pathways?
 ### U251
 
-```{r}
+```{r, results='hide'}
 
 tum_ranked_U251 <- read_csv("./results/DESeq2_u251.csv") %>% 
   rename("ENSEMBL" = "...1") %>% 
@@ -321,13 +321,16 @@ gse_U251_1 <- gseGO(geneList=gene_list_U251,
                     OrgDb = org.Hs.eg.db, 
                     pAdjustMethod = "none")
 
-dotplot(gse_U251_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
-
 ```
+
+```{r}
+dotplot(gse_U251_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
+```
+
 
 ### U87
 
-```{r}
+```{r, results='hide'}
 
 tum_ranked_U87 <- read_csv("./results/DESeq2_u87.csv") %>% 
   rename("ENSEMBL" = "...1") %>% 
@@ -352,9 +355,12 @@ gse_U87_1 <- gseGO(geneList=gene_list,
               verbose = TRUE, 
               OrgDb = org.Hs.eg.db, 
               pAdjustMethod = "none")
+```
 
+```{r}
 dotplot(gse_U87_1, showCategory=5, split=".sign") + facet_grid(.~.sign)
 ```
+
 
 ## Venn Diagram
 ### Q5. Find shared up-regulated and down-regulated genes across the two cell lines
